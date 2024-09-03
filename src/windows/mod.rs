@@ -3,6 +3,7 @@ mod context;
 mod wintrust_sys;
 
 use super::Error;
+use windows_sys::Win32::Foundation::WIN32_ERROR;
 use wintrust_sys::{
     CloseHandle, CreateFileW, CryptCATAdminAcquireContext2, CryptCATAdminCalcHashFromFileHandle2,
     CryptCATAdminEnumCatalogFromHash, CryptCATAdminReleaseCatalogContext,
@@ -65,7 +66,7 @@ impl Verifier {
     // Extract the path of a pid, then call for file
     pub fn for_pid(pid: i32) -> Result<Self, Error> {
         let path = get_process_path(pid as _)?;
-        Self::for_file(path)
+        Ok(Self::for_file(path))
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -171,7 +172,7 @@ impl Verifier {
         wci.pcwszMemberFilePath = self.0.as_ptr();
         wci.pcwszMemberTag = hash.as_ptr();
 
-        match self.verify_internal(None, Some(&mut wci)) {
+        match Self::verify_internal(None, Some(&mut wci)) {
             Ok(context) => Ok(context),
             Err(err) => Err(Error::OsError(err as i32)),
         }

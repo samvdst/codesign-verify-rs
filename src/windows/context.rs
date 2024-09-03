@@ -1,3 +1,5 @@
+use windows_sys::Win32::Foundation::WIN32_ERROR;
+
 use super::wintrust_sys::{
     CertGetNameStringW, WTHelperGetProvCertFromChain, WTHelperGetProvSignerFromChain,
     WTHelperProvDataFromStateData, WinVerifyTrust, CERT_NAME_ATTR_TYPE, CERT_NAME_ISSUER_FLAG,

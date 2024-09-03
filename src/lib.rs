@@ -65,7 +65,7 @@ impl CodeSignVerifier {
     /// On Windows it will get the full path to the running application first.
     /// This can be used for e.g. verifying the app on the other end of a pipe.
     pub fn for_pid(pid: i32) -> Result<Self, Error> {
-        Verifier::for_pid(pid).map(|v| CodeSignVerifier(v))
+        Verifier::for_pid(pid).map(CodeSignVerifier)
     }
 
     /// Perform the verification itself.
@@ -77,7 +77,7 @@ impl CodeSignVerifier {
     /// ```no_run
     /// use codesign_verify::CodeSignVerifier;
     ///
-    /// CodeSignVerifier::for_file("C:/Windows/explorer.exe").unwrap().verify().unwrap();
+    /// CodeSignVerifier::for_file("C:/Windows/explorer.exe").verify().unwrap();
     /// ```
     pub fn verify(self) -> Result<SignatureContext, Error> {
         self.0.verify().map(SignatureContext)
@@ -92,7 +92,7 @@ impl SignatureContext {
     /// ```no_run
     /// use codesign_verify::CodeSignVerifier;
     ///
-    /// let ctx = CodeSignVerifier::for_file("C:/Windows/explorer.exe").unwrap().verify().unwrap();
+    /// let ctx = CodeSignVerifier::for_file("C:/Windows/explorer.exe").verify().unwrap();
     /// assert_eq!(
     ///    ctx.subject_name().organization.as_deref(),
     ///    Some("Microsoft Corporation")
