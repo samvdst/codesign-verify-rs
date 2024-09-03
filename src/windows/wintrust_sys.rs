@@ -16,8 +16,11 @@ pub use windows_sys::Win32::System::Threading::{
 
 #[allow(non_camel_case_types)]
 pub type PCCERT_CONTEXT = *const CERT_CONTEXT;
+#[allow(clippy::upper_case_acronyms)]
 pub type DWORD = c_ulong;
+#[allow(clippy::upper_case_acronyms)]
 pub type BOOL = c_int;
+#[allow(clippy::upper_case_acronyms)]
 pub type BYTE = c_uchar;
 
 #[link(name = "Wintrust")]
