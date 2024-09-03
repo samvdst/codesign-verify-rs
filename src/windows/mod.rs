@@ -63,13 +63,18 @@ impl Verifier {
         Self(path_vec)
     }
 
+    #[allow(clippy::cast_sign_loss)]
     // Extract the path of a pid, then call for file
     pub fn for_pid(pid: i32) -> Result<Self, Error> {
         let path = get_process_path(pid as _)?;
         Ok(Self::for_file(path))
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
     pub fn verify(&self) -> Result<Context, Error> {
         unsafe {
             let mut file_info: WINTRUST_FILE_INFO = std::mem::zeroed();
@@ -89,7 +94,7 @@ impl Verifier {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     unsafe fn verify_catalog_signed(&self) -> Result<Context, Error> {
         let h_file = CreateFileW(
             self.0.as_ptr(),
@@ -207,30 +212,28 @@ impl Verifier {
         let mut guid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
 
         // Verify that the signature is actually valid
-        match WinVerifyTrust(
+        if WinVerifyTrust(
             INVALID_HANDLE_VALUE as _,
             &mut guid,
-            &mut data as *mut _ as _,
-        ) {
-            0 => {}
-            _ => {
-                let _ = Context::new(data.hWVTStateData); // So close gets called on the data
-                return Err(GetLastError());
-            }
+            std::ptr::from_mut(&mut data).cast(),
+        ) == 0
+        {
+            Context::new(data.hWVTStateData)
+        } else {
+            let _ = Context::new(data.hWVTStateData); // So close gets called on the data
+            Err(GetLastError())
         }
-
-        Context::new(data.hWVTStateData)
     }
 }
 
 /// Attempts to get the full system path for a given proccess id
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 fn get_process_path(proc_id: u32) -> Result<String, Error> {
     let mut buf = [0u16; 2048];
 
     unsafe {
         let proc_handle = match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, proc_id) {
-            handle if handle == 0 => return Err(Error::OsError(GetLastError() as i32)),
+            0 => return Err(Error::OsError(GetLastError() as i32)),
             handle => handle,
         };
 
