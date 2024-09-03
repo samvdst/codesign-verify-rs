@@ -3,11 +3,23 @@ mod context;
 mod wintrust_sys;
 
 use super::Error;
-use wintrust_sys::*;
+use wintrust_sys::{
+    CloseHandle, CreateFileW, CryptCATAdminAcquireContext2, CryptCATAdminCalcHashFromFileHandle2,
+    CryptCATAdminEnumCatalogFromHash, CryptCATAdminReleaseCatalogContext,
+    CryptCATAdminReleaseContext, CryptCATCatalogInfoFromContext, GetLastError, OpenProcess,
+    QueryFullProcessImageNameW, WinVerifyTrust, BCRYPT_SHA256_ALGORITHM, BYTE, CATALOG_INFO, DWORD,
+    ERROR_INVALID_PARAMETER, FALSE, FILE_SHARE_READ, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE,
+    OPEN_EXISTING, PROCESS_QUERY_LIMITED_INFORMATION, TRUST_E_NOSIGNATURE,
+    WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_CATALOG_INFO, WINTRUST_DATA, WINTRUST_FILE_INFO,
+    WTD_CACHE_ONLY_URL_RETRIEVAL, WTD_CHOICE_CATALOG, WTD_CHOICE_FILE, WTD_DISABLE_MD2_MD4,
+    WTD_NO_IE4_CHAIN_FLAG, WTD_REVOCATION_CHECK_END_CERT, WTD_REVOKE_NONE, WTD_STATEACTION_VERIFY,
+    WTD_UICONTEXT_EXECUTE, WTD_UI_NONE, WTD_USE_DEFAULT_OSVER_CHECK,
+};
 
 pub(crate) struct Verifier(Vec<u16>);
 pub(crate) use context::Context;
 
+#[allow(clippy::struct_field_names)]
 struct CleanupContext {
     h_file: HANDLE,
     h_cat_admin: HANDLE,
@@ -41,13 +53,13 @@ impl Drop for CleanupContext {
 }
 
 impl Verifier {
-    pub fn for_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Error> {
+    pub fn for_file<P: AsRef<std::path::Path>>(path: P) -> Self {
         use std::os::windows::ffi::OsStrExt;
 
         let mut path_vec: Vec<u16> = path.as_ref().as_os_str().encode_wide().collect();
         path_vec.push(0); // Make sure path is null terminated
 
-        Ok(Self(path_vec))
+        Self(path_vec)
     }
 
     // Extract the path of a pid, then call for file
@@ -56,13 +68,14 @@ impl Verifier {
         Self::for_file(path)
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn verify(&self) -> Result<Context, Error> {
         unsafe {
             let mut file_info: WINTRUST_FILE_INFO = std::mem::zeroed();
             file_info.cbStruct = std::mem::size_of::<WINTRUST_FILE_INFO>() as u32;
             file_info.pcwszFilePath = self.0.as_ptr();
 
-            match self.verify_internal(Some(&mut file_info), None) {
+            match Self::verify_internal(Some(&mut file_info), None) {
                 Ok(context) => Ok(context),
                 Err(err) => {
                     if err == TRUST_E_NOSIGNATURE as u32 {
@@ -75,6 +88,7 @@ impl Verifier {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     unsafe fn verify_catalog_signed(&self) -> Result<Context, Error> {
         let h_file = CreateFileW(
             self.0.as_ptr(),
@@ -144,11 +158,10 @@ impl Verifier {
             return Err(Error::OsError(err));
         }
 
-        let hash_str = hash_buffer
-            .iter()
-            .map(|&val| format!("{:02x}", val))
-            .collect::<Vec<String>>()
-            .join("");
+        let hash_str = hash_buffer.iter().fold(String::new(), |mut acc, &val| {
+            acc.push_str(&format!("{val:02x}"));
+            acc
+        });
         let mut hash: Vec<u16> = hash_str.encode_utf16().collect();
         hash.push(0); // Make sure hash is null terminated
 
@@ -164,8 +177,8 @@ impl Verifier {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     unsafe fn verify_internal(
-        &self,
         file_info: Option<*mut WINTRUST_FILE_INFO>,
         catalog_info: Option<*mut WINTRUST_CATALOG_INFO>,
     ) -> Result<Context, WIN32_ERROR> {
@@ -210,6 +223,7 @@ impl Verifier {
 }
 
 /// Attempts to get the full system path for a given proccess id
+#[allow(clippy::cast_possible_truncation)]
 fn get_process_path(proc_id: u32) -> Result<String, Error> {
     let mut buf = [0u16; 2048];
 
@@ -235,21 +249,14 @@ mod tests {
     extern crate std;
 
     fn verify_file(process_path: &str, expected_issuer: &str) {
-        match Verifier::for_file(process_path) {
-            Ok(signature_verifier) => {
-                match signature_verifier.verify() {
-                    Ok(context) => {
-                        assert_eq!(context.issuer_name().organization.unwrap(), expected_issuer);
-                    }
-                    Err(err) => {
-                        panic!("failed to verify signature. {:?}", err);
-                    }
-                };
+        match Verifier::for_file(process_path).verify() {
+            Ok(context) => {
+                assert_eq!(context.issuer_name().organization.unwrap(), expected_issuer);
             }
             Err(err) => {
-                panic!("failed to get signature verifier. {:?}", err);
+                panic!("failed to verify signature. {:?}", err);
             }
-        };
+        }
     }
 
     #[test]

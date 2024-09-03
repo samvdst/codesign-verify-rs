@@ -1,4 +1,10 @@
-use super::wintrust_sys::*;
+use super::wintrust_sys::{
+    CertGetNameStringW, WTHelperGetProvCertFromChain, WTHelperGetProvSignerFromChain,
+    WTHelperProvDataFromStateData, WinVerifyTrust, CERT_NAME_ATTR_TYPE, CERT_NAME_ISSUER_FLAG,
+    DWORD, HANDLE, INVALID_HANDLE_VALUE, PCCERT_CONTEXT, TRUST_E_NO_SIGNER_CERT,
+    WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WTD_REVOKE_NONE, WTD_STATEACTION_CLOSE,
+    WTD_UICONTEXT_EXECUTE, WTD_UI_NONE,
+};
 use crate::Name;
 
 #[allow(non_camel_case_types)]
@@ -19,6 +25,7 @@ impl Drop for Context {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn close_data(handle: HANDLE) {
     // Initialize the WINTRUST_DATA structure
     let mut data: WINTRUST_DATA = unsafe { std::mem::zeroed() };
@@ -111,7 +118,7 @@ impl Context {
         )
     }
 
-    pub fn serial(&self) -> Option<String> {
+    pub fn serial(&self) -> String {
         let serial_blob = unsafe {
             self.leaf_cert_ptr
                 .as_ref()
@@ -126,10 +133,8 @@ impl Context {
             unsafe { std::slice::from_raw_parts(serial_blob.pbData, serial_blob.cbData as usize) };
 
         // For some reason windows stores the serial number in reverse order
-        Some(
-            blob.iter()
-                .fold(String::new(), |v, s| format!("{:02x}{}", s, v)),
-        )
+        blob.iter()
+            .fold(String::new(), |v, s| format!("{:02x}{}", s, v))
     }
 
     pub fn subject_name(&self) -> Name {
