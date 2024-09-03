@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(windows)]
@@ -54,8 +57,8 @@ pub enum Error {
 impl CodeSignVerifier {
     /// Create a verifier for a binary at a given path.
     /// On macOS it can be either a binary or an application package.
-    pub fn for_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Error> {
-        Verifier::for_file(path).map(|v| CodeSignVerifier(v))
+    pub fn for_file<P: AsRef<std::path::Path>>(path: P) -> Self {
+        CodeSignVerifier(Verifier::for_file(path))
     }
 
     /// Create a verifier for a running application by PID.
@@ -67,7 +70,7 @@ impl CodeSignVerifier {
 
     /// Perform the verification itself.
     /// On macOS the verification uses the Security framework with "anchor trusted" as the requirement.
-    /// On Windows the verification uses WinTrust and the `WINTRUST_ACTION_GENERIC_VERIFY_V2` action.
+    /// On Windows the verification uses `WinTrust` and the `WINTRUST_ACTION_GENERIC_VERIFY_V2` action.
     ///
     /// # Examples
     ///
@@ -77,7 +80,7 @@ impl CodeSignVerifier {
     /// CodeSignVerifier::for_file("C:/Windows/explorer.exe").unwrap().verify().unwrap();
     /// ```
     pub fn verify(self) -> Result<SignatureContext, Error> {
-        self.0.verify().map(|c| SignatureContext(c))
+        self.0.verify().map(SignatureContext)
     }
 }
 
@@ -96,27 +99,32 @@ impl SignatureContext {
     /// );
     ///
     /// ```
+    #[must_use]
     pub fn subject_name(&self) -> Name {
         self.0.subject_name()
     }
 
     /// Retrieve the issuer name on the leaf certificate
+    #[must_use]
     pub fn issuer_name(&self) -> Name {
         self.0.issuer_name()
     }
 
     /// Compute the sha1 thumbprint of the leaf certificate
+    #[must_use]
     pub fn sha1_thumbprint(&self) -> String {
         self.0.sha1_thumbprint()
     }
 
     /// Compute the sha256 thumbprint of the leaf certificate
+    #[must_use]
     pub fn sha256_thumbprint(&self) -> String {
         self.0.sha256_thumbprint()
     }
 
     /// Retrieve the leaf certificate serial number
-    pub fn serial(&self) -> Option<String> {
+    #[must_use]
+    pub fn serial(&self) -> String {
         self.0.serial()
     }
 }
@@ -152,7 +160,7 @@ mod tests {
     #[cfg(windows)]
     fn test_signed() {
         let path = format!("{}/explorer.exe", std::env::var("windir").unwrap()); // Should always be present on Windows
-        let verifier = super::CodeSignVerifier::for_file(path).unwrap();
+        let verifier = super::CodeSignVerifier::for_file(path);
         let ctx = verifier.verify().unwrap(); // Should always be signed
 
         // If those values begin to fail, Microsoft probably changed their certficate
@@ -171,10 +179,7 @@ mod tests {
             "d8fb0cc66a08061b42d46d03546f0d42cbc49b7c"
         );
 
-        assert_eq!(
-            ctx.serial().as_deref(),
-            Some("3300000460cf42a912315f6fb3000000000460")
-        );
+        assert_eq!(ctx.serial(), "3300000460cf42a912315f6fb3000000000460");
     }
 
     #[test]
@@ -182,7 +187,7 @@ mod tests {
         let path = std::env::args().next().unwrap(); // own path, always unsigned and present
 
         assert!(matches!(
-            super::CodeSignVerifier::for_file(path).unwrap().verify(),
+            super::CodeSignVerifier::for_file(path).verify(),
             Err(Error::Unsigned)
         ));
     }
